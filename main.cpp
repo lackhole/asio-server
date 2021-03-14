@@ -16,6 +16,7 @@ int main()
 {
   std::cout << "foo" << std::endl;
   std::cout << "foo2" << std::endl;
+  std::cout << "foo3" << std::endl;
   try
   {
     boost::asio::io_context io_context;
