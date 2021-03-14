@@ -15,3 +15,4 @@ See [`deploy/config.txt`](deploy/config.txt)
 
 ## AWS EC2 CI
 * Not yet
+* [Partial](https://github.com/lackhole/asio-server/actions)
