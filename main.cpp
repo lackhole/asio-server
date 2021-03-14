@@ -1,6 +1,8 @@
 #include <ctime>
 #include <iostream>
 #include <string>
+#include <climits>
+#include <exception>
 #include <boost/asio.hpp>
 
 using boost::asio::ip::tcp;
@@ -12,17 +14,23 @@ std::string make_daytime_string()
   return ctime(&now);
 }
 
-int main()
+int main(int argc, char* argv[])
 {
-  std::cout << "foo" << std::endl;
-  std::cout << "foo2" << std::endl;
-  std::cout << "foo3" << std::endl;
-  std::cout << "develop" << std::endl;
+  if(argc != 2) {
+    std::cerr << "port number not provided\n";
+    return EXIT_FAILURE;
+  }
+
+
   try
   {
+    int port_num = std::stoi(argv[2]);
+    if(port_num >= USHRT_MAX)
+      throw std::runtime_error("invalid port number: " + std::to_string(port_num));
+
     boost::asio::io_context io_context;
 
-    tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), 13));
+    tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port_num));
     for (;;)
     {
       tcp::socket socket(io_context);
