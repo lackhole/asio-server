@@ -7,6 +7,15 @@
 
 using boost::asio::ip::tcp;
 
+std::string get_build_type()
+{
+#ifdef NDEBUG
+  return "Release";
+#else
+  return "Debug";
+#endif
+}
+
 std::string make_daytime_string()
 {
   using namespace std; // For time_t, time and ctime;
@@ -21,6 +30,7 @@ int main(int argc, char* argv[])
     return EXIT_FAILURE;
   }
 
+  std::cout << "Build Type: " << get_build_type() << std::endl;
 
   try
   {
@@ -28,12 +38,12 @@ int main(int argc, char* argv[])
     if(port_num >= USHRT_MAX)
       throw std::runtime_error("invalid port number: " + std::to_string(port_num));
 
-    std::cout << make_daytime_string() + " Initializing\n";
-
     boost::asio::io_context io_context;
+    auto endpoint = tcp::endpoint(tcp::v4(), port_num);
 
-    tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), port_num));
-    std::cout << make_daytime_string() + " Running\n";
+    tcp::acceptor acceptor(io_context, endpoint);
+    std::cout << make_daytime_string() << " Running at " << endpoint << std::endl;
+
     for (;;)
     {
       tcp::socket socket(io_context);
