@@ -11,7 +11,7 @@
 * port: 13
 
 ## Configurations
-See `deploy/config.txt`
+See [`deploy/config.txt`](deploy/config.txt)
 
 ## AWS EC2 CI
 * Not yet
