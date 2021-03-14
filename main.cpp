@@ -1,33 +1,55 @@
 #include <ctime>
 #include <iostream>
 #include <string>
+#include <climits>
+#include <exception>
 #include <boost/asio.hpp>
 
 using boost::asio::ip::tcp;
 
+std::string get_build_type()
+{
+#ifdef NDEBUG
+  return "Release";
+#else
+  return "Debug";
+#endif
+}
+
 std::string make_daytime_string()
 {
   using namespace std; // For time_t, time and ctime;
-  time_t now = time(0);
+  time_t now = time(nullptr);
   return ctime(&now);
 }
 
-int main()
+int main(int argc, char* argv[])
 {
-  std::cout << "develop" << std::endl;
+  if(argc != 2) {
+    std::cerr << "port number not provided\n";
+    return EXIT_FAILURE;
+  }
+
+  std::cout << "Build Type: " << get_build_type() << std::endl;
+
   try
   {
-    boost::asio::io_context io_context;
+    int port_num = std::stoi(argv[1]);
+    if(port_num >= USHRT_MAX)
+      throw std::runtime_error("invalid port number: " + std::to_string(port_num));
 
-    tcp::acceptor acceptor(io_context, tcp::endpoint(tcp::v4(), 13));
+    boost::asio::io_context io_context;
+    auto endpoint = tcp::endpoint(tcp::v4(), port_num);
+
+    tcp::acceptor acceptor(io_context, endpoint);
+    std::cout << make_daytime_string() << " Running at " << endpoint << std::endl;
+
     for (;;)
     {
       tcp::socket socket(io_context);
       acceptor.accept(socket);
 
       std::string message = make_daytime_string();
-//      std::cout << "connection" << std::endl;
-//      std::this_thread::sleep_for(std::chrono::seconds(10));
       std::cout << message << std::endl;
 
       boost::system::error_code ignored_error;
