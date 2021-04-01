@@ -9,4 +9,4 @@ cd "${BUILD_DIR}"
 
 BUILD_TYPE=$1
 cmake ${PROJECT_DIR} -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
-make -j8
+make -j 8
