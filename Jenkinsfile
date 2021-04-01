@@ -2,7 +2,8 @@ node {
     stage('Build') {
         echo 'Building....'
         sh 'ls -al'
-        pwd
+        sh 'pwd'
+        sh 'whoami'
     }
     stage('Test') {
         echo 'Testing....'
