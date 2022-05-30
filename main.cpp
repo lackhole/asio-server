@@ -4,6 +4,7 @@
 #include <climits>
 #include <exception>
 #include <boost/asio.hpp>
+#include <boost/array.hpp>
 
 using boost::asio::ip::tcp;
 
@@ -54,6 +55,18 @@ int main(int argc, char* argv[])
 
       boost::system::error_code ignored_error;
       boost::asio::write(socket, boost::asio::buffer(message), ignored_error);
+
+      boost::array<char, 128> buf{};
+      boost::system::error_code error;
+
+      std::size_t len = socket.receive(boost::asio::buffer(buf));
+
+      if (error == boost::asio::error::eof)
+        break;
+      else if (error)
+        throw boost::system::system_error(error);
+
+      std::cout.write(buf.data(), len);
     }
   }
   catch (std::exception& e)
