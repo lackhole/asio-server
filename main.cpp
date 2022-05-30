@@ -64,7 +64,7 @@ int main(int argc, char* argv[])
       boost::array<char, 128> buf{};
       boost::system::error_code error;
 
-      std::size_t len = socket.receive(boost::asio::buffer(buf));
+      std::size_t len = socket.read_some(boost::asio::buffer(buf), error);
 
       if (error == boost::asio::error::eof)
         break;
@@ -75,9 +75,9 @@ int main(int argc, char* argv[])
       std::cout << std::endl;
     }
   }
-  catch (std::exception& e)
+  catch (const std::exception& e)
   {
-    std::cerr << e.what() << std::endl;
+    std::cerr << "Exception: " << e.what() << std::endl;
   }
 
   return 0;
