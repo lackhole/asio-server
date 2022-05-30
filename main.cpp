@@ -72,6 +72,7 @@ int main(int argc, char* argv[])
         throw boost::system::system_error(error);
 
       std::cout.write(buf.data(), len);
+      std::cout << std::endl;
     }
   }
   catch (std::exception& e)
