@@ -45,8 +45,7 @@ int main(int argc, char* argv[])
     tcp::acceptor acceptor(io_context, endpoint);
     std::cout << make_daytime_string() << " Running at " << endpoint << std::endl;
 
-    for (;;)
-    {
+    do {
       tcp::socket socket(io_context);
       acceptor.accept(socket);
 
@@ -55,6 +54,12 @@ int main(int argc, char* argv[])
 
       boost::system::error_code ignored_error;
       boost::asio::write(socket, boost::asio::buffer(message), ignored_error);
+    } while (false);
+
+    for (;;)
+    {
+      tcp::socket socket(io_context);
+      acceptor.accept(socket);
 
       boost::array<char, 128> buf{};
       boost::system::error_code error;
