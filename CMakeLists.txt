@@ -19,10 +19,13 @@ message("============================================================\n")
 
 add_subdirectory(boost)
 
-add_executable(asio_server main.cpp)
-
+add_executable(asio_server
+    main.cpp
+    storage_manager.cc)
 target_link_libraries(asio_server boost)
 
-project(daytime_server)
-add_executable(daytime_server daytime_server.cc)
-target_link_libraries(daytime_server boost)
+target_compile_definitions(asio_server PUBLIC STREAM_SERVER_BASE_DIR=${CMAKE_CURRENT_LIST_DIR})
+
+#project(daytime_server)
+#add_executable(daytime_server daytime_server.cc)
+#target_link_libraries(daytime_server boost)

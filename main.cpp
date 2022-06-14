@@ -14,10 +14,9 @@
 #include <boost/array.hpp>
 
 #include "packet.h"
+#include "storage_manager.h"
 
 using boost::asio::ip::tcp;
-
-constexpr const char* kPwd = "/home/ubuntu/Documents/GitHub/asio-server/";
 
 std::string get_build_type()
 {
@@ -28,23 +27,18 @@ std::string get_build_type()
 #endif
 }
 
+namespace fs = std::filesystem;
+
 void update_index_file(int idx) {
   static constexpr const char* kTempFileName = "last_index.tmp.txt";
   static constexpr const char* kTargetFileName = "last_index.txt";
 
-  std::ofstream ofs;
-  ofs.open(kPwd + std::string("images/") + kTempFileName);
-
-  if (!ofs.is_open())
-    return;
+  const auto& storage = StorageManager::Get().public_storage();
 
   const auto value = std::to_string(idx);
-  ofs.write(value.c_str(), value.size());
-  ofs.close();
 
-  namespace fs = std::filesystem;
-  fs::rename(fs::path(kPwd + std::string("images/") + kTempFileName),
-             fs::path(kPwd + std::string("images/") + kTargetFileName));
+  storage.Write(fs::path("images")/kTempFileName, value.c_str(), value.size());
+  storage.Rename(fs::path("images")/kTempFileName, fs::path("images")/kTargetFileName);
 }
 
 std::string make_index(int value, int n_zero = 10) {
@@ -66,7 +60,7 @@ std::string make_daytime_string()
 //   ss.str("");
 
 //   if (!ofs.is_open()) {
-//     ofs.open(kPwd + file_name);
+//     ofs.open(StrCat(kPwd, "/", file_name));
 //   }
 
 //   size_t index = 0;
@@ -94,123 +88,128 @@ std::string make_daytime_string()
 //   std::cerr << "\nWriting done" << std::endl;
 // }
 
-std::vector<char> listen(boost::asio::io_context& io_context, tcp::acceptor& acceptor) {
-  std::vector<char> data;
+void listen(boost::asio::io_context& io_context, tcp::acceptor& acceptor) {
   Packet packet;
 
   bool get = false;
   static int idx = 1;
-  std::ofstream ofs;
+  boost::system::error_code error;
+
+  const auto& public_storage = StorageManager::Get().public_storage();
+  const auto& private_storage = StorageManager::Get().private_storage();
 
   for(;;) {
     tcp::socket socket(io_context);
     acceptor.accept(socket);
 
-    boost::system::error_code error;
     const std::size_t len = boost::asio::read(socket, boost::asio::buffer(packet.buffer(), kPacketSize), error);
     packet.setSize(len);
 
-    const auto header = packet.header();
-    const auto it = header.find(kHeaderDone);
-    const auto done = it != header.end() && it->second == "1";
+    if (len >= to_byte(kPacketHeaderSizeBit)) {
 
-    for (const auto& p : header) {
-      std::cout << p.first << ": " << p.second << std::endl;
-    }
-    std::cout << "DataSize: " << len << std::endl;
+      const auto header = packet.header();
+      const auto it = header.find(kHeaderDone);
+      const auto done = it != header.end() && it->second == "1";
 
-    if (const auto rq = header.find(kRequest); rq->second == kRequestGet) {
-      get = true;
-    }
-
-    if (const auto fmt = header.find("FileFormat"); fmt != header.end()) {
-      const auto path = kPwd + std::string("images/") + std::to_string(idx) + ".jpg";
-      std::cout << "Path: " << path << '\n';
-
-      if (!ofs.is_open()) {
-        ofs.open(path, std::ios::binary);
+      for (const auto& p: header) {
+        std::cout << p.first << ": " << p.second << std::endl;
       }
-      const auto data = packet.data();
-      ofs.write(data.first, len);
-    }
+      std::cout << "DataSize: " << len << std::endl;
 
-    if (error == boost::asio::error::eof) {
+      if (const auto rq = header.find(kRequest); rq->second == kRequestGet) {
+        get = true;
+      }
+
+      if (const auto fmt = header.find("FileFormat"); fmt != header.end()) {
+        const auto path = fs::path("images")/StrCat(idx, ".jpg");
+        std::cout << "Path: " << path << '\n';
+
+        const auto data = packet.data();
+        public_storage.Write(path, data.first, len, std::ios::out | std::ios_base::app);
+      }
+
+      if (done) {
+        std::cout << "File receive done." << std::endl;
+        update_index_file(idx);
+        ++idx;
+        break;
+      }
+    } else if (error == boost::asio::error::eof) {
+      public_storage.Remove(fs::path("images")/StrCat(idx, ".jpg"));
       std::cout << "EOF: Connection closed cleanly by peer." << std::endl;
       break;
     }
-    if (done) {
-      std::cout << "File send done." << std::endl;
-      break;
-    }
-  }
-
-  if (ofs.is_open()) {
-    ofs.close();
-    update_index_file(idx);
-    ++idx;
   }
 
   if (get) {
     const auto data_view = packet.data();
-    const auto data = std::string(data_view.first, data_view.second);
-    std::cout << "Client requested: " << data << '\n';
-    
-    std::ifstream ifs;
-    ifs.open(std::string(kPwd) + data);
-    if (ifs.is_open()) {
-      std::stringstream buffer;
-      buffer << ifs.rdbuf();
-      const auto file_content = buffer.str();
+    const auto requested_file = std::string(data_view.first, data_view.second);
+    std::cout << "Client requested: " << requested_file << '\n';
 
-      const char* data = file_content.c_str();
-      const auto data_size = file_content.size();
+    const auto file_content = private_storage.Read(requested_file);
+    if (!file_content) {
+      std::cout << private_storage.root() + "/" + requested_file << " not exists.\n";
 
-      size_t sent_size_data = 0;
-      size_t remaining_size = data_size;
-      size_t sent_size_packet = 0;
+      // TODO: Send error code instead of manually closing
+      tcp::socket socket(io_context);
+      acceptor.accept(socket);
+      socket.close();
 
-      while (remaining_size > 0) {
-        tcp::socket socket(io_context);
-        acceptor.accept(socket);
+      return;
+    }
 
+    std::cout << "Found " << file_content->c_str() << '\n';
 
-        // TODO: Send some header values only once at the beginning
-        std::unordered_map<std::string, std::string> header = {
-          {kHeaderStatus, "200"},
-          {kHeaderTotalSize, std::to_string(data_size)},
-          {kHeaderDone, "0"}
-        };
+    const char* data = file_content->c_str();
+    const auto data_size = file_content->size();
 
-        const auto header_size = Packet::CalcHeaderSize(header);
-        header[kHeaderDone] = std::to_string((header_size + remaining_size) <= packet.capacity());
+    size_t sent_size_data = 0;
+    size_t remaining_size = data_size;
+    size_t sent_size_packet = 0;
 
-        packet.clear();
-        packet.write_header(header);
+    while (remaining_size > 0) {
+      tcp::socket socket(io_context);
+      acceptor.accept(socket);
 
 
-        const auto sending_size = packet.remaining_size() > remaining_size ? remaining_size : packet.remaining_size();
+      // TODO: Send some header values only once at the beginning
+      std::unordered_map<std::string, std::string> header = {
+        {kHeaderStatus, "200"},
+        {kHeaderTotalSize, std::to_string(data_size)},
+        {kHeaderDone, "0"}
+      };
 
-        packet.write_data(data + sent_size_data, sending_size);
+      const auto header_size = Packet::CalcHeaderSize(header);
+      header[kHeaderDone] = std::to_string((header_size + remaining_size) <= packet.capacity());
 
-        boost::system::error_code ignored_error;
-        boost::asio::write(socket, boost::asio::buffer(packet.buffer(), packet.size()), ignored_error);
+      packet.clear();
+      packet.write_header(header);
 
-        remaining_size -= sending_size;
-        sent_size_data += sending_size;
-        sent_size_packet += packet.size();
-        std::cout << "Sent " << sending_size << "bytes. (" << sending_size << '/' << data_size << ")\n";
-      }
+
+      const auto sending_size = packet.remaining_size() > remaining_size ? remaining_size : packet.remaining_size();
+
+      packet.write_data(data + sent_size_data, sending_size);
+
+      boost::system::error_code ignored_error;
+      boost::asio::write(socket, boost::asio::buffer(packet.buffer(), packet.size()), ignored_error);
+
+      remaining_size -= sending_size;
+      sent_size_data += sending_size;
+      sent_size_packet += packet.size();
+      std::cout << "Sent " << sending_size << "bytes. (" << sending_size << '/' << data_size << ")\n";
     }
   }
-
-  return data;
 }
 
 int main(int argc, char* argv[])
 {
-  if(argc != 2) {
+  if(argc < 2) {
     std::cerr << "port number not provided\n";
     return EXIT_FAILURE;
+  }
+
+  if (argc == 3) {
+    StorageManager::Get().relocate(argv[2]);
   }
 
   std::cout << "Build Type: " << get_build_type() << std::endl;
@@ -227,11 +226,6 @@ int main(int argc, char* argv[])
 
     tcp::acceptor acceptor(io_context, endpoint);
     std::cout << make_daytime_string() << " Running at " << endpoint << std::endl;
-
-          
-    boost::array<char, kPacketSize> buf{};
-    boost::system::error_code error;
-    std::size_t len;
 
     for (;;) {
       std::cout << "<BEGIN>" << std::endl;
