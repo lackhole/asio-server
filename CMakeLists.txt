@@ -17,14 +17,17 @@ message("COMPILE FALGS : ${CMAKE_CXX_FLAGS}")
 message("CMAKE_BUILD_TYPE : ${CMAKE_BUILD_TYPE}")
 message("============================================================\n")
 
-add_subdirectory(boost)
+add_subdirectory(third_party/boost)
 
-add_executable(asio_server
-    main.cpp
-    storage_manager.cc)
-target_link_libraries(asio_server boost)
+set(STREAM_SERVER_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/include")
 
-target_compile_definitions(asio_server PUBLIC STREAM_SERVER_BASE_DIR=${CMAKE_CURRENT_LIST_DIR})
+add_executable(stream_server
+    main.cc
+    include/stream/storage_manager.cc)
+
+target_link_libraries(stream_server PUBLIC boost)
+target_include_directories(stream_server PUBLIC ${STREAM_SERVER_INCLUDE_DIR})
+target_compile_definitions(stream_server PUBLIC STREAM_SERVER_BASE_DIR=${CMAKE_CURRENT_LIST_DIR})
 
 #project(daytime_server)
 #add_executable(daytime_server daytime_server.cc)
