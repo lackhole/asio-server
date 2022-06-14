@@ -1,5 +1,8 @@
 *.idea
 *cmake-build*
-*.DS_Store
+*/.DS_Store
 
 deploy/build/*
+
+*.vscode
+images
