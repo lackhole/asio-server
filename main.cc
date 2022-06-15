@@ -26,18 +26,36 @@ std::string get_build_type()
 #endif
 }
 
+static constexpr const char* kTempFileName = "last_index.tmp.txt";
+static constexpr const char* kTargetFileName = "last_index.txt";
+
+int idx;
+
 namespace fs = std::filesystem;
 
 void update_index_file(int idx) {
-  static constexpr const char* kTempFileName = "last_index.tmp.txt";
-  static constexpr const char* kTargetFileName = "last_index.txt";
-
   const auto& storage = StorageManager::Get().public_storage();
 
   const auto value = std::to_string(idx);
 
   storage.Write(fs::path("images")/kTempFileName, value.c_str(), value.size());
   storage.Rename(fs::path("images")/kTempFileName, fs::path("images")/kTargetFileName);
+}
+
+int read_index() {
+  const auto& storage = StorageManager::Get().public_storage();
+
+  const auto data = storage.Read(fs::path("images")/kTargetFileName);
+  if (data) {
+    try {
+      const auto index = std::stoi(*data);
+      return index;
+    } catch (...) {}
+  }
+
+  update_index_file(1);
+
+  return 1;
 }
 
 std::string make_index(int value, int n_zero = 10) {
@@ -91,7 +109,6 @@ void listen(boost::asio::io_context& io_context, tcp::acceptor& acceptor) {
   Packet packet;
 
   bool get = false;
-  static int idx = 1;
   boost::system::error_code error;
 
   const auto& public_storage = StorageManager::Get().public_storage();
@@ -213,7 +230,7 @@ int main(int argc, char* argv[])
 
   std::cout << "Build Type: " << get_build_type() << std::endl;
 
-  update_index_file(1);
+  idx = read_index();
 
   try {
     int port_num = std::stoi(argv[1]);
